@@ -1,0 +1,9 @@
+{
+  "isTemplate": true,
+  "templateRepo": "Libra-Europe/Project-Template-App-Creation",
+  "version": "1.0.0",
+  "templateOnly": [
+    ".template/",
+    ".github/workflows/template-checks.yml"
+  ]
+}

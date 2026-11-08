@@ -1,0 +1,139 @@
+# github-workflow-test.yml
+# Copied from `templates/testing/` in the project template.
+# Destination: `.github/workflows/test.yml`
+#
+# ORDERING NOTE — read this before changing the job graph.
+# End-to-end tests are commonly pointed at a preview deployment, which puts them
+# before the deployment that produces their URL. This workflow avoids that
+# entirely: Playwright starts the application itself through the `webServer`
+# block in `playwright.config.ts`, so E2E depends on nothing but the build. The
+# preview deployment then runs afterwards, or on its own workflow, and is never
+# a prerequisite of the tests.
+#
+# To run the suite against a deployed URL instead, set `E2E_BASE_URL` in the
+# `Run end-to-end tests` step — `webServer` is skipped whenever it is set.
+
+name: Test
+
+# Runs on the integration and release branches named in `.claude/collab.json`.
+# A workflow cannot read that file, so both branches the template's model uses
+# are listed: `main`, and `dev` once the go-live cut creates it. A listed branch
+# that does not exist yet costs nothing. If `integrationBranch` names any other
+# branch, add it to both lists.
+on:
+  pull_request:
+    branches: [main, dev]
+  push:
+    branches: [main, dev]
+
+# Read-only token (docs/general_docs/SECURITY.md §6). Grant more per job, only where needed.
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Type check, lint, unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Fails on a high or critical advisory in a production dependency
+      # (docs/general_docs/SECURITY.md §6).
+      - name: Dependency audit
+        run: pnpm audit --prod --audit-level=high
+
+      # Playwright transpiles TypeScript but does not type-check it, so the type
+      # check has to be its own step.
+      - name: Type check
+        run: pnpm exec tsc --noEmit
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Unit and integration tests
+        run: pnpm test:coverage
+
+  e2e:
+    name: End-to-end and accessibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [quality]
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Not optional. Playwright cannot run without the browser binaries, and a
+      # missing `--with-deps` is the most common cause of a first CI run failing
+      # with "Executable doesn't exist".
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      # Built here, as its own step, so the build time is not counted against
+      # `webServer.timeout` in `playwright.config.ts`.
+      - name: Build the application
+        run: pnpm build
+        env:
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+
+      # `playwright test` starts `pnpm start` itself and waits for it to answer.
+      # This runs the flow specs, the permission matrix and the a11y scans.
+      #
+      # The test users are FIXED — one per role, created by hand in the auth
+      # provider, never created by the suite. Concurrent CI jobs therefore share
+      # them, so every spec must scope its own data with a unique per-test
+      # identifier rather than relying on a private user.
+      - name: Run end-to-end tests
+        run: pnpm test:e2e
+        env:
+          CI: 'true'
+          # The publishable key is not secret; the secret key is.
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+          # One address per role in `ROLES`. Addresses are not secret; the shared
+          # password is. Add a line here for every role the project defines.
+          E2E_ADMIN_EMAIL: ${{ vars.E2E_ADMIN_EMAIL }}
+          E2E_MANAGER_EMAIL: ${{ vars.E2E_MANAGER_EMAIL }}
+          E2E_MEMBER_EMAIL: ${{ vars.E2E_MEMBER_EMAIL }}
+          E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
+          DATABASE_URL: ${{ secrets.E2E_DATABASE_URL }}
+
+      # `playwright.config.ts` selects the HTML reporter on CI, so this directory
+      # is written directly and needs no merge step.
+      #
+      # If a `--shard` matrix is ever added, switch that config to the `blob`
+      # reporter, give each shard a uniquely named artefact, and add a job that
+      # downloads them all and runs `playwright merge-reports --reporter html`.
+      # Blob without a merge job is an unreadable zip, which is why neither is
+      # here now.
+      - name: Upload the Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

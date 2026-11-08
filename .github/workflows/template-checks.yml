@@ -1,0 +1,98 @@
+# Checks the template itself, not a project made from it. Each check is one
+# command that can also be run locally from the repository root, and each runs
+# even when an earlier one fails, so a single run reports everything broken.
+#
+# Actions are pinned to full commit SHAs with the version in a trailing comment
+# (docs/general_docs/SECURITY.md §6). Dependabot's github-actions entry in
+# .github/dependabot.yml bumps both.
+
+name: Template checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: template-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Template checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      # A glob rather than the folder: Node 24 reads --test arguments as glob
+      # patterns and does not search a bare folder for test files, so the glob
+      # works on every Node a developer might still have installed.
+      - name: Hook tests
+        if: ${{ !cancelled() }}
+        run: node --test '.claude/hooks/test/*.test.mjs'
+
+      # AGENTS.md holds the instructions and CLAUDE.md only imports it, so the
+      # two cannot drift apart.
+      - name: CLAUDE.md imports AGENTS.md
+        if: ${{ !cancelled() }}
+        run: node .template/checks/check-claude-import.mjs
+
+      - name: Settings files are valid JSON
+        if: ${{ !cancelled() }}
+        run: |
+          node -e 'for (const file of process.argv.slice(1)) {
+            try { JSON.parse(require("node:fs").readFileSync(file, "utf8")); }
+            catch (error) { console.error(`${file}: ${error.message}`); process.exitCode = 1; }
+          }' .claude/settings.json .claude/collab.json .claude/template.json .mcp.json
+
+      - name: Scaffold documents are blank
+        if: ${{ !cancelled() }}
+        run: node .template/checks/check-scaffolds.mjs
+
+      - name: Doc references resolve
+        if: ${{ !cancelled() }}
+        run: node .template/checks/check-doc-refs.mjs
+
+  # The starter app installs, type-checks, lints and builds on the pinned Node and
+  # pnpm. This is not the pipeline projects inherit; it only proves the starter builds.
+  app:
+    name: Starter app
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Installs the pnpm version pinned in package.json's packageManager field.
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        if: ${{ !cancelled() }}
+        run: pnpm typecheck
+
+      - name: Lint
+        if: ${{ !cancelled() }}
+        run: pnpm lint
+
+      - name: Build
+        if: ${{ !cancelled() }}
+        run: pnpm build

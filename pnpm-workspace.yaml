@@ -1,0 +1,11 @@
+# pnpm settings for the whole repository (docs/general_docs/SECURITY.md §6).
+
+# Install scripts run only for packages listed here as true. pnpm fails the install
+# when a new dependency has a script nobody has reviewed; decide true or false for it.
+# Both are false because each ships prebuilt binaries and needs no script.
+allowBuilds:
+  sharp: false
+  unrs-resolver: false
+
+# Refuse to install on a Node version outside "engines" in package.json.
+engineStrict: true

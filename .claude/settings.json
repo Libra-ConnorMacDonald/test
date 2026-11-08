@@ -1,0 +1,110 @@
+{
+  "enabledPlugins": {
+    "frontend-design@claude-plugins-official": true,
+    "context7@claude-plugins-official": true,
+    "security-guidance@claude-plugins-official": true,
+    "typescript-lsp@claude-plugins-official": true
+  },
+  "enabledMcpjsonServers": [
+    "playwright"
+  ],
+  "permissions": {
+    "allow": [
+      "Bash(pnpm test *)",
+      "Bash(pnpm test:e2e *)",
+      "Bash(pnpm test:a11y *)",
+      "Bash(pnpm test:permissions *)",
+      "Bash(pnpm exec playwright *)",
+      "Bash(pnpm exec vitest *)",
+      "Bash(git fetch *)",
+      "PowerShell(pnpm test *)",
+      "PowerShell(pnpm test:e2e *)",
+      "PowerShell(pnpm test:a11y *)",
+      "PowerShell(pnpm test:permissions *)",
+      "PowerShell(pnpm exec playwright *)",
+      "PowerShell(pnpm exec vitest *)",
+      "PowerShell(git fetch *)"
+    ],
+    "deny": [
+      "mcp__playwright__browser_run_code_unsafe",
+      "Bash(git fetch *--upl*)",
+      "PowerShell(git fetch *--upl*)"
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/statusline.mjs\""
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/branch-guard.mjs"
+            ]
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(*git*)",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/security-gate.mjs"
+            ],
+            "timeout": 30
+          },
+          {
+            "type": "command",
+            "if": "Bash(*gh*)",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/security-gate.mjs"
+            ],
+            "timeout": 30
+          },
+          {
+            "type": "command",
+            "if": "PowerShell(*git*)",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/security-gate.mjs"
+            ],
+            "timeout": 30
+          },
+          {
+            "type": "command",
+            "if": "PowerShell(*gh*)",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/security-gate.mjs"
+            ],
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/branch-guard.mjs",
+              "record"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

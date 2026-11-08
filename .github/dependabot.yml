@@ -1,0 +1,12 @@
+# Weekly dependency and GitHub Actions updates (docs/general_docs/SECURITY.md §6).
+version: 2
+updates:
+  - package-ecosystem: npm # also reads pnpm-lock.yaml
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

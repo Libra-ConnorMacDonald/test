@@ -1,0 +1,40 @@
+{
+  "enabled": true,
+  "guardMode": "ask",
+  "integrationBranch": "main",
+  "releaseBranch": "main",
+  "protectedBranches": ["main", "dev"],
+  "branchPattern": "{user}/{task}-{slug}",
+  "adhocPrefix": "fix",
+  "mergeStrategy": "github-pr",
+  "allowOnIntegration": [".tasks/**"],
+  "database": {
+    "provider": "neon",
+    "integrationBranch": "dev",
+    "perPullRequestBranches": false
+  },
+  "maxParallelTickets": 3,
+  "hotspotFiles": [
+    "package.json",
+    "pnpm-lock.yaml",
+    "db/schema.ts",
+    "db/migrations/**",
+    ".claude/settings.json",
+    "app/layout.tsx",
+    "README.md",
+    "CLAUDE.md",
+    "AGENTS.md",
+    ".claude/rules/**"
+  ],
+  "migrationPaths": ["db/migrations/**"],
+  "ticketNaming": {
+    "worktree": ".claude/worktrees/{task}-{slug}",
+    "databaseBranch": "{branch}",
+    "devServerPort": { "base": 4000, "span": 1000 },
+    "workingFolder": ".tasks/{task}"
+  },
+  "cleanupProtected": {
+    "gitBranches": ["main", "dev"],
+    "databaseBranches": ["main", "dev"]
+  }
+}

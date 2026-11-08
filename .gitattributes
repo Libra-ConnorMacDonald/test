@@ -1,0 +1,5 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Keep shell scripts LF-only — a CRLF shebang produces "bad interpreter" in Git Bash
+*.sh text eol=lf
